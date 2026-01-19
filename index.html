@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Butterfly Effect Engine</title>
+
+  <!-- Basic SEO -->
+  <meta name="description" content="Type a decision. Watch reality spiral. Share your fate." />
+
+  <!-- Open Graph (replace YOUR-USERNAME + repo path, and provide og.png in same folder) -->
+  <meta property="og:title" content="Butterfly Effect: Alternate Reality Generator" />
+  <meta property="og:description" content="Type a decision. Watch reality spiral. Share your fate." />
+  <meta property="og:type" content="website" />
+  <!--
+    Set og:url and og:image to your deployed URL after you publish.
+    Example:
+    <meta property="og:url" content="https://YOUR-USERNAME.github.io/butterfly-app/" />
+    <meta property="og:image" content="https://YOUR-USERNAME.github.io/butterfly-app/og.png" />
+  -->
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Butterfly Effect: Alternate Reality Generator" />
+  <meta name="twitter:description" content="Type a decision. Watch reality spiral. Share your fate." />
+  <!-- <meta name="twitter:image" content="https://YOUR-USERNAME.github.io/butterfly-app/og.png" /> -->
+
+  <style>
+    :root {
+      --bg-top: #0b1020;
+      --bg-bottom: #070a12;
+      --card-bg: rgba(255, 255, 255, 0.06);
+      --card-border: rgba(255, 255, 255, 0.14);
+      --text: rgba(255, 255, 255, 0.92);
+      --muted: rgba(255, 255, 255, 0.68);
+      --accent: rgba(122, 162, 247, 0.95);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    .container { max-width: 600px; width: 100%; }
+    h1 { text-align: center; margin: 10px 0 22px; font-size: 28px; font-weight: 850; letter-spacing: 0.2px; }
+
+    input {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--card-border);
+      background: rgba(0,0,0,0.22);
+      color: var(--text);
+      box-sizing: border-box;
+      margin-bottom: 12px;
+      font-size: 16px;
+      outline: none;
+    }
+    input:focus { border-color: rgba(122,162,247,0.55); }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid var(--card-border);
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      padding: 12px;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.1s;
+      user-select: none;
+    }
+    .btn-primary { border-color: rgba(122, 162, 247, 0.55); background: rgba(122, 162, 247, 0.18); }
+    .btn:active { transform: translateY(2px); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 22px;
+      backdrop-filter: blur(8px);
+      margin-top: 14px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 220ms ease, transform 220ms ease;
+      will-change: opacity, transform;
+    }
+    .card.is-visible { opacity: 1; transform: translateY(0); }
+
+    .story-text { white-space: pre-wrap; line-height: 1.6; font-size: 17px; }
+    .meta-text { font-size: 12px; color: var(--muted); margin-top: 14px; display: block; }
+
+    .toast {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      min-height: 18px;
+      text-align: center;
+    }
+
+    canvas { display: none; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .card { transition: none; transform: none; }
+      .btn { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Alternate Reality</h1>
+
+    <input id="decision-input" type="text" placeholder="What if I…" maxlength="180" />
+
+    <div class="controls">
+      <button id="generate-btn" class="btn btn-primary">Generate Fate</button>
+      <button id="remix-btn" class="btn" disabled>Remix Fate</button>
+      <button id="share-link-btn" class="btn" disabled>Copy Link</button>
+      <button id="share-img-btn" class="btn" disabled>Share Image</button>
+    </div>
+
+    <div id="story-card" class="card">
+      <div id="story-text" class="story-text">Your destiny awaits…</div>
+      <span id="result-id" class="meta-text"></span>
+    </div>
+
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <canvas id="share-canvas"></canvas>
+
+<script>
+/**
+ * BUTTERFLY EFFECT ENGINE v2.1 (Hardened + Version-locked pools + Share URL + ID parsing)
+ */
+const butterflyEngine = {
+  version: "v2",
+
+  poolsByVersion: {
+    v2: {
+      categoryMap: {
+        food: ["eat","pizza","burrito","cook","dinner","snack","restaurant","taco","coffee","burger","sushi"],
+        career: ["job","work","boss","interview","promotion","resume","office","meeting","salary","linkedin"],
+        social: ["party","date","friend","text","call","wedding","message","group chat","dm","snap","invite"]
+      },
+      pivots: [
+        'Because you decided to "{{decision}}"...',
+        'The timeline fractured the moment you chose to "{{decision}}"...',
+        'You thought "{{decision}}" was a small choice. The universe disagreed...',
+        'It all started when you casually decided to "{{decision}}"...'
+      ],
+      escalations: [
+        { text: "your microwave achieved sentience and demanded creative control", weight: 1, tag: "food" },
+        { text: "your burrito receipt was misfiled as an international treaty", weight: 2, tag: "food" },
+        { text: "a food influencer declared you the 'Patron Saint of Snacks'", weight: 2, tag: "food" },
+
+        { text: "a recruiter spawned behind you like an NPC offering a side quest", weight: 2, tag: "career" },
+        { text: "the office printer sensed fear and promoted itself to management", weight: 2, tag: "career" },
+        { text: "your calendar started auto-booking 'emergency meetings' with your own feelings", weight: 2, tag: "career" },
+
+        { text: "someone screenshotted your message and called it 'context for the group chat trial'", weight: 2, tag: "social" },
+        { text: "the group chat voted and legally reclassified your vibe as 'weather'", weight: 1, tag: "social" },
+        { text: "a friend started a podcast episode titled 'Let’s unpack what you did'", weight: 1, tag: "social" },
+
+        { text: "an algorithm labeled you a 'thought leader' and you couldn’t appeal the decision", weight: 2, tag: "general" },
+        { text: "your phone started autocorrecting your life choices in real time", weight: 2, tag: "general" },
+        { text: "a minor typo legally changed your name to something you can’t pronounce", weight: 1, tag: "general" }
+      ],
+      finales: [
+        { text: "and now you live in a palace made of sourdough bread", weight: 2 },
+        { text: "which is why you are currently fleeing from a very confused pigeon", weight: 3 },
+        { text: "and you now pay rent in compliments to a committee of raccoons", weight: 2 },
+        { text: "which is how you ended up moderating a debate between two houseplants", weight: 1 },
+        { text: "and the city installed a small plaque about you that just says 'Please don’t'", weight: 1 },
+        { text: "and your email signature is legally required to include an apology", weight: 2 },
+        { text: "and your life has been rebooted as a limited-run streaming series with ads", weight: 2 }
+      ]
+    }
+  },
+
+  // --- INTERNAL UTILITIES ---
+  createRng(seed) {
+    return function () {
+      let t = (seed += 0x6D2B79F5);
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  },
+
+  pickWeighted(pool, rngFunc) {
+    const safePool = Array.isArray(pool) ? pool : [];
+    if (safePool.length === 0) return "";
+
+    const totalWeight = safePool.reduce((sum, item) => sum + (item.weight ?? 0), 0);
+    if (totalWeight <= 0) return safePool[0]?.text || "";
+
+    let roll = rngFunc() * totalWeight;
+    for (const item of safePool) {
+      roll -= (item.weight ?? 0);
+      if (roll <= 0) return item.text;
+    }
+    return safePool[0]?.text || "";
+  },
+
+  ensureEndsWith(t, c) {
+    const s = String(t ?? "").trim();
+    if (!s) return "";
+    return s.endsWith(c) ? s : `${s}${c}`;
+  },
+
+  ensureFinalPunctuation(t) {
+    const s = String(t ?? "").trim();
+    if (!s) return "";
+    return (/[.!?]$/.test(s)) ? s : `${s}.`;
+  },
+
+  // --- ID MANAGEMENT ---
+  makeResultId(seed, ver = this.version) {
+    return `${ver}-${seed.toString(36)}`;
+  },
+
+  parseResultId(resultId) {
+    const m = String(resultId || "").trim().match(/^([a-z0-9]+)-([a-z0-9]+)$/i);
+    if (!m) return null;
+    const version = m[1].toLowerCase();
+    const seed = parseInt(m[2], 36);
+    return Number.isFinite(seed) ? { version, seed } : null;
+  },
+
+  detectCategory(decision, categoryMap) {
+    const l = String(decision || "").toLowerCase();
+    for (const [c, k] of Object.entries(categoryMap || {})) {
+      if (k.some(kw => l.includes(kw))) return c;
+    }
+    return "general";
+  },
+
+  // --- SHARE URL HELPERS ---
+  buildShareUrl(baseUrl, decision, resultId) {
+    const url = new URL(baseUrl);
+    url.searchParams.set("id", resultId);
+    url.searchParams.set("d", decision);
+    return url.toString();
+  },
+
+  loadFromUrl(search = null) {
+    const queryString = search ?? (typeof window !== "undefined" ? window.location.search : "");
+    const params = new URLSearchParams(queryString);
+    const id = params.get("id");
+    let d = params.get("d");
+    if (!id || !d) return null;
+    d = d.replace(/\+/g, " ");
+    return this.generateFromId(d, id);
+  },
+
+  // --- CORE API ---
+  generateReality(decision, providedSeed = null, targetVersion = null) {
+    const ver = targetVersion || this.version;
+    const pool = this.poolsByVersion[ver];
+
+    // Guard 1: Missing Pool
+    if (!pool) return { error: `Pool for version ${ver} not found.` };
+    // Guard 2: Empty Pivots
+    if (!Array.isArray(pool.pivots) || pool.pivots.length === 0) {
+      return { error: `Pool ${ver} has no valid pivots.` };
+    }
+
+    const seed = Number.isInteger(providedSeed) ? providedSeed : Math.floor(Math.random() * 2147483647);
+    const rng = this.createRng(seed);
+
+    const category = this.detectCategory(decision, pool.categoryMap);
+
+    const pivot = pool.pivots[Math.floor(rng() * pool.pivots.length)].replace("{{decision}}", decision);
+    const filteredEsc = (pool.escalations || []).filter(e => !e.tag || e.tag === category || e.tag === "general");
+
+    const esc = this.ensureEndsWith(this.pickWeighted(filteredEsc, rng), ",");
+    const fin = this.ensureFinalPunctuation(this.pickWeighted(pool.finales, rng));
+
+    return {
+      resultId: this.makeResultId(seed, ver),
+      seed,
+      version: ver,
+      category,
+      story: `${pivot}\n\n${esc} ${fin}`
+    };
+  },
+
+  generateFromId(decision, resultId) {
+    const parsed = this.parseResultId(resultId);
+    if (!parsed) return { error: "Invalid ID format. Expected like 'v2-k9z3m1'." };
+    if (!this.poolsByVersion[parsed.version]) return { error: `Version ${parsed.version} is not supported.` };
+    return this.generateReality(decision, parsed.seed, parsed.version);
+  }
+};
+
+/**
+ * UI + TYPEWRITER + SHARE (Link + Image)
+ */
+const decisionInput = document.getElementById("decision-input");
+const generateBtn = document.getElementById("generate-btn");
+const remixBtn = document.getElementById("remix-btn");
+const shareLinkBtn = document.getElementById("share-link-btn");
+const shareImgBtn = document.getElementById("share-img-btn");
+const storyCard = document.getElementById("story-card");
+const storyTextEl = document.getElementById("story-text");
+const resultIdEl = document.getElementById("result-id");
+const toastEl = document.getElementById("toast");
+const canvas = document.getElementById("share-canvas");
+
+let lastResult = null;
+let revealController = null;
+
+function toast(msg) {
+  toastEl.textContent = msg || "";
+}
+
+function typeReveal(element, text, options = {}) {
+  const { cps = 52, chunkMin = 1, chunkMax = 4 } = options;
+
+  let cancelled = false;
+  let i = 0;
+
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  element.textContent = "";
+
+  if (reduceMotion) {
+    element.textContent = text;
+    return { cancel(){} };
+  }
+
+  const tickMs = Math.max(12, Math.floor(1000 / cps));
+  const timer = setInterval(() => {
+    if (cancelled) { clearInterval(timer); return; }
+    const remaining = text.length - i;
+    if (remaining <= 0) { clearInterval(timer); return; }
+
+    const chunk = Math.min(remaining, chunkMin + Math.floor(Math.random() * (chunkMax - chunkMin + 1)));
+    element.textContent += text.slice(i, i + chunk);
+    i += chunk;
+  }, tickMs);
+
+  return { cancel() { cancelled = true; clearInterval(timer); } };
+}
+
+function renderResult(result) {
+  if (revealController) revealController.cancel();
+  storyCard.classList.add("is-visible");
+
+  if (result.error) {
+    lastResult = null;
+    resultIdEl.textContent = "";
+    storyTextEl.textContent = result.error;
+    remixBtn.disabled = true;
+    shareLinkBtn.disabled = true;
+    shareImgBtn.disabled = true;
+    toast("");
+    return;
+  }
+
+  lastResult = result;
+  resultIdEl.textContent = `ID: ${result.resultId}`;
+  toast("");
+
+  remixBtn.disabled = false;
+  shareLinkBtn.disabled = false;
+  shareImgBtn.disabled = false;
+
+  revealController = typeReveal(storyTextEl, result.story);
+}
+
+// 1) Enter to Generate + dismiss keyboard
+decisionInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    generateBtn.click();
+    decisionInput.blur();
+  }
+});
+
+generateBtn.addEventListener("click", () => {
+  const val = decisionInput.value.trim();
+  if (!val) { toast("Enter a decision first."); return; }
+  renderResult(butterflyEngine.generateReality(val));
+});
+
+// Remix
+remixBtn.addEventListener("click", () => {
+  const val = decisionInput.value.trim();
+  if (!val) return;
+  renderResult(butterflyEngine.generateReality(val));
+});
+
+// Share link
+shareLinkBtn.addEventListener("click", async () => {
+  if (!lastResult) return;
+  const baseUrl = window.location.origin + window.location.pathname;
+  const shareLink = butterflyEngine.buildShareUrl(baseUrl, decisionInput.value.trim(), lastResult.resultId);
+
+  try {
+    await navigator.clipboard.writeText(shareLink);
+    toast("Link copied.");
+  } catch {
+    window.prompt("Copy this link:", shareLink);
+  }
+});
+
+/**
+ * CANVAS RENDERER (High-DPI + wrapping + CSS-variable theme)
+ */
+function getCssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
+function wrapText(ctx, text, maxWidth) {
+  const lines = [];
+  const paragraphs = String(text).split("\n");
+
+  for (const p of paragraphs) {
+    if (p.trim() === "") { lines.push(""); continue; }
+    const words = p.split(/\s+/);
+    let line = "";
+
+    for (const w of words) {
+      const test = line ? `${line} ${w}` : w;
+      if (ctx.measureText(test).width <= maxWidth) {
+        line = test;
+      } else {
+        if (line) lines.push(line);
+        if (ctx.measureText(w).width > maxWidth) {
+          let chunk = "";
+          for (const ch of w) {
+            const testChunk = chunk + ch;
+            if (ctx.measureText(testChunk).width <= maxWidth) chunk = testChunk;
+            else { lines.push(chunk); chunk = ch; }
+          }
+          line = chunk;
+        } else {
+          line = w;
+        }
+      }
+    }
+    if (line) lines.push(line);
+  }
+  return lines;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+function renderShareImage(canvas, { decision, resultId, story }) {
+  const theme = {
+    bgTop: getCssVar("--bg-top", "#0b1020"),
+    bgBottom: getCssVar("--bg-bottom", "#070a12"),
+    cardBg: getCssVar("--card-bg", "rgba(255,255,255,0.06)"),
+    cardBorder: getCssVar("--card-border", "rgba(255,255,255,0.14)"),
+    text: getCssVar("--text", "rgba(255,255,255,0.92)"),
+    muted: getCssVar("--muted", "rgba(255,255,255,0.68)"),
+    accent: getCssVar("--accent", "rgba(122,162,247,0.95)")
+  };
+
+  const cssWidth = 1080;
+  const padding = 64;
+  const cardPadding = 56;
+  const radius = 28;
+
+  const titleSize = 44;
+  const bodySize = 34;
+  const metaSize = 26;
+  const lineHeight = 42;
+
+  const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+  const ctx = canvas.getContext("2d");
+  const fontStack = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
+
+  ctx.font = `${bodySize}px ${fontStack}`;
+  const innerWidth = cssWidth - (padding * 2) - (cardPadding * 2);
+  const storyLines = wrapText(ctx, story, innerWidth);
+
+  const titleBlock = (titleSize + 18);
+  const metaBlock = (metaSize * 2) + 24;
+  const storyBlock = storyLines.length * lineHeight;
+
+  const cardHeight = cardPadding * 2 + titleBlock + metaBlock + storyBlock + 18;
+  const height = Math.max(800, padding * 2 + cardHeight + 60);
+
+  canvas.width = cssWidth * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = `${cssWidth}px`;
+  canvas.style.height = `${height}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const grad = ctx.createLinearGradient(0, 0, 0, height);
+  grad.addColorStop(0, theme.bgTop);
+  grad.addColorStop(1, theme.bgBottom);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cssWidth, height);
+
+  const cardX = padding;
+  const cardY = padding + 20;
+  const cardW = cssWidth - padding * 2;
+  const cardH = cardHeight;
+
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 10;
+  roundRect(ctx, cardX, cardY, cardW, cardH, radius);
+  ctx.fillStyle = theme.cardBg;
+  ctx.fill();
+  ctx.restore();
+
+  roundRect(ctx, cardX, cardY, cardW, cardH, radius);
+  ctx.strokeStyle = theme.cardBorder;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = theme.accent;
+  roundRect(ctx, cardX + 18, cardY + 18, 10, cardH - 36, 8);
+  ctx.fill();
+
+  let x = cardX + cardPadding;
+  let y = cardY + cardPadding;
+
+  ctx.fillStyle = theme.text;
+  ctx.font = `800 ${titleSize}px ${fontStack}`;
+  ctx.fillText("Your Alternate Reality", x, y + titleSize);
+  y += titleBlock;
+
+  ctx.fillStyle = theme.muted;
+  ctx.font = `700 ${metaSize}px ${fontStack}`;
+  ctx.fillText(`Share ID: ${resultId}`, x, y + metaSize);
+  y += metaSize + 12;
+
+  ctx.font = `600 ${metaSize}px ${fontStack}`;
+  ctx.fillText(`Decision: ${decision}`, x, y + metaSize);
+  y += metaSize + 22;
+
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(cardX + cardW - cardPadding, y);
+  ctx.stroke();
+  y += 26;
+
+  ctx.fillStyle = theme.text;
+  ctx.font = `${bodySize}px ${fontStack}`;
+  for (const line of storyLines) {
+    if (line === "") y += lineHeight;
+    else { ctx.fillText(line, x, y + bodySize); y += lineHeight; }
+  }
+
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.font = `600 22px ${fontStack}`;
+  ctx.fillText("Butterfly Effect Engine", padding, height - 36);
+
+  return canvas;
+}
+
+function downloadCanvas(canvas, filename = "butterfly-effect.png") {
+  const link = document.createElement("a");
+  link.download = filename;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+function canvasToPngBlob(canvas) {
+  return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), "image/png"));
+}
+
+async function shareOrCopyImage(canvas, filename) {
+  const blob = await canvasToPngBlob(canvas);
+  if (!blob) return { ok: false, method: "none" };
+
+  const file = new File([blob], filename, { type: "image/png" });
+
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: "Butterfly Effect", text: "My alternate reality…" });
+      return { ok: true, method: "share-sheet" };
+    } catch {}
+  }
+
+  if (navigator.clipboard && window.ClipboardItem) {
+    try {
+      const item = new ClipboardItem({ "image/png": blob });
+      await navigator.clipboard.write([item]);
+      return { ok: true, method: "clipboard" };
+    } catch {}
+  }
+
+  downloadCanvas(canvas, filename);
+  return { ok: true, method: "download" };
+}
+
+// 2) Hardened share image button (prevents double-taps)
+shareImgBtn.addEventListener("click", async () => {
+  if (!lastResult || shareImgBtn.disabled) return;
+
+  shareImgBtn.disabled = true;
+  toast("Preparing your destiny...");
+
+  try {
+    renderShareImage(canvas, {
+      decision: decisionInput.value.trim(),
+      resultId: lastResult.resultId,
+      story: lastResult.story
+    });
+
+    const outcome = await shareOrCopyImage(canvas, `butterfly-${lastResult.resultId}.png`);
+    if (outcome.method === "share-sheet") toast("Opened share sheet.");
+    else if (outcome.method === "clipboard") toast("Image copied! Paste to share.");
+    else if (outcome.method === "download") toast("Download started.");
+  } catch (err) {
+    toast("Share failed. Try again.");
+    console.error(err);
+  } finally {
+    shareImgBtn.disabled = false;
+  }
+});
+
+// Auto-load from share URL
+window.addEventListener("DOMContentLoaded", () => {
+  const loaded = butterflyEngine.loadFromUrl();
+  if (!loaded) return;
+
+  const params = new URLSearchParams(window.location.search);
+  const d = (params.get("d") || "").replace(/\+/g, " ");
+  decisionInput.value = d;
+
+  renderResult(loaded);
+});
+</script>
+</body>
+</html>
